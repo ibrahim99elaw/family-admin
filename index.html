@@ -1,0 +1,19 @@
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>لوحة التحكم</title><link rel="stylesheet" href="style.css"></head><body>
+<h1>⚙️ لوحة التحكم</h1>
+<div id="login" class="card"><h3>تسجيل الدخول</h3><input id="em" type="email" placeholder="الإيميل"><input id="pw" type="password" placeholder="كلمة السر"><button id="in">دخول</button></div>
+<div id="app" hidden>
+<form id="f" class="card"><h3>بيانات الشخص</h3><input type="hidden" id="id">
+<input id="fullName" placeholder="الاسم الكامل (ثلاثي/رباعي)" required><input id="name" placeholder="اسم الشهرة المختصر (يظهر في الأزرار)" required><input id="nickname" placeholder="اللقب (اختياري)">
+<select id="gender"><option value="m">ذكر</option><option value="f">أنثى</option></select>
+<select id="fatherId"></select><select id="motherId"></select>
+<label style="color:#9fb0c6;font-size:13px">الزوج / الزوجة (اختياري، تقدر تضيف أكتر من واحد)</label>
+<div style="display:flex;gap:6px"><select id="spSel"></select><button type="button" id="spAdd" style="width:auto;white-space:nowrap">+ إضافة</button></div><div id="spChips"></div>
+<input id="birth" placeholder="سنة الميلاد"><input id="job" placeholder="الوظيفة"><div style="text-align:center;margin:8px 0"><div id="pv" class="av" style="width:96px;height:96px;font-size:32px;animation:none">📷</div>
+<input type="hidden" id="photo"><input type="file" id="pf" accept="image/*" hidden><input type="file" id="pc" accept="image/*" capture="user" hidden>
+<button type="button" class="sec" id="pg">🖼️ اختيار صورة من الجهاز</button><button type="button" class="sec" id="pcam">📸 التقاط صورة بالكاميرا</button><button type="button" class="sec" id="px">حذف الصورة</button></div><textarea id="bio" rows="4" placeholder="نبذة تعريفية"></textarea>
+<button>حفظ</button><button type="button" class="sec" id="rs">جديد</button></form>
+<div class="card"><h3>الأشخاص</h3><div id="list"></div></div><button class="sec" id="out">تسجيل خروج</button></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script><script src="admin.js"></script></body></html>
