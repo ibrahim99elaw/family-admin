@@ -11,11 +11,12 @@ async function load() {
   $('#motherId').innerHTML = opt(L.filter(p => p.gender === 'f'), 'الأم (اختياري)');
   renderSp();
   $('#list').innerHTML = L.map(p => `<div class="row"><span>${p.fullName}</span><span><button onclick="edit('${p.id}')">تعديل</button> <button class="sec" onclick="del('${p.id}')">حذف</button></span></div>`).join('') || '<p>لسه مفيش بيانات</p>';
+  loadGal();
 }
 const F = ['fullName', 'name', 'nickname', 'gender', 'fatherId', 'motherId', 'birth', 'job', 'photo', 'bio'];
 function edit(id) {
   const p = P[id]; $('#id').value = id; F.forEach(k => $('#' + k).value = p[k] || '');
-  setPhoto(p.photo);
+  setPhoto(p.photo); autoM = autoF = false;
   SP = [...(p.spouseIds || [])]; renderSp(); scrollTo(0, 0);
 }
 async function del(id) {
@@ -24,7 +25,7 @@ async function del(id) {
   (P[id].spouseIds || []).forEach(s => b.update(C.doc(s), { spouseIds: firebase.firestore.FieldValue.arrayRemove(id) }));
   await b.commit(); load();
 }
-$('#rs').onclick = () => { $('#f').reset(); $('#id').value = ''; setPhoto(''); SP = []; renderSp(); };
+$('#rs').onclick = () => { $('#f').reset(); $('#id').value = ''; setPhoto(''); SP = []; renderSp(); autoM = autoF = false; };
 $('#f').onsubmit = async e => {
   e.preventDefault();
   const id = $('#id').value || C.doc().id, old = P[id]?.spouseIds || [], sp = SP.filter(s => s !== id);
@@ -66,3 +67,32 @@ function renderSp() {
 function rmSp(id) { SP = SP.filter(s => s !== id); renderSp(); }
 $('#spAdd').onclick = () => { const v = $('#spSel').value; if (v) { SP.push(v); renderSp(); } };
 $('#gender').onchange = renderSp;
+
+// لما تختار الأب بيختار الأم تلقائي (زوجته)، والعكس
+let autoM = false, autoF = false;
+const spOf = (id, g) => (P[id]?.spouseIds || []).filter(s => P[s] && P[s].gender === g);
+$('#fatherId').onchange = () => { autoF = false; const s = spOf($('#fatherId').value, 'f'); if (s.length && (!$('#motherId').value || autoM)) { $('#motherId').value = s[0]; autoM = true; } };
+$('#motherId').onchange = () => { autoM = false; const s = spOf($('#motherId').value, 'm'); if (s.length && (!$('#fatherId').value || autoF)) { $('#fatherId').value = s[0]; autoF = true; } };
+
+// معرض الصفحة الرئيسية (collection: gallery) — الصور بتتصغر لـ 1100px وتتخزن داخل Firestore
+const G = db.collection('gallery');
+const safe = s => String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+async function loadGal() {
+  const s = await G.orderBy('ts').get();
+  $('#gl').innerHTML = s.docs.map(d => `<div class="gi"><img src="${d.data().img}"><small>${safe(d.data().caption)}</small><button class="sec" onclick="delGal('${d.id}')">حذف</button></div>`).join('') || '<p>لسه مفيش صور</p>';
+}
+async function delGal(id) { if (confirm('حذف الصورة؟')) { await G.doc(id).delete(); loadGal(); } }
+function shrinkTo(file, max = 1100, q = .7) {
+  return new Promise(res => {
+    const i = new Image();
+    i.onload = () => { const k = Math.min(1, max / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = i.width * k; c.height = i.height * k; c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); };
+    i.src = URL.createObjectURL(file);
+  });
+}
+['gf', 'gc'].forEach(k => $('#' + k).onchange = async e => {
+  const fs = [...e.target.files]; let n = 0;
+  for (const f of fs) { $('#gst').textContent = `جاري الرفع ${++n}/${fs.length}...`; await G.add({ img: await shrinkTo(f), caption: $('#gcap').value.trim(), ts: Date.now() + n }); }
+  e.target.value = ''; $('#gcap').value = ''; $('#gst').textContent = ''; loadGal();
+});
+$('#gpick').onclick = () => $('#gf').click();
+$('#gcam').onclick = () => $('#gc').click();

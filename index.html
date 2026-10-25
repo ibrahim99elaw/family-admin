@@ -12,6 +12,11 @@
 <input type="hidden" id="photo"><input type="file" id="pf" accept="image/*" hidden><input type="file" id="pc" accept="image/*" capture="user" hidden>
 <button type="button" class="sec" id="pg">🖼️ اختيار صورة من الجهاز</button><button type="button" class="sec" id="pcam">📸 التقاط صورة بالكاميرا</button><button type="button" class="sec" id="px">حذف الصورة</button></div><textarea id="bio" rows="4" placeholder="نبذة تعريفية"></textarea>
 <button>حفظ</button><button type="button" class="sec" id="rs">جديد</button></form>
+<div class="card"><h3>صور الصفحة الرئيسية (بتتبدل لوحدها)</h3>
+<input id="gcap" placeholder="تعليق على الصورة (اختياري)">
+<input type="file" id="gf" accept="image/*" multiple hidden><input type="file" id="gc" accept="image/*" capture="environment" hidden>
+<button type="button" id="gpick">🖼️ إضافة صور من الجهاز (تقدر تختار كذا واحدة)</button><button type="button" class="sec" id="gcam">📸 التقاط صورة بالكاميرا</button>
+<p id="gst" style="text-align:center;color:#d4a954"></p><div id="gl" class="gg"></div></div>
 <div class="card"><h3>الأشخاص</h3><div id="list"></div></div><button class="sec" id="out">تسجيل خروج</button></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
