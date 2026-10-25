@@ -32,6 +32,11 @@ $('#f').onsubmit = async e => {
   const data = { spouseIds: sp }; F.forEach(k => data[k] = $('#' + k).value.trim());
   const b = db.batch(), V = firebase.firestore.FieldValue;
   b.set(C.doc(id), data);
+  const fa = data.fatherId, mo = data.motherId;  // الأب والأم يتربطوا كزوجين تلقائي
+  if (fa && mo && P[fa] && P[mo]) {
+    if (!(P[fa].spouseIds || []).includes(mo)) b.update(C.doc(fa), { spouseIds: V.arrayUnion(mo) });
+    if (!(P[mo].spouseIds || []).includes(fa)) b.update(C.doc(mo), { spouseIds: V.arrayUnion(fa) });
+  }
   sp.forEach(s => b.update(C.doc(s), { spouseIds: V.arrayUnion(id) }));
   old.filter(s => !sp.includes(s) && P[s]).forEach(s => b.update(C.doc(s), { spouseIds: V.arrayRemove(id) }));
   await b.commit(); $('#rs').click(); load();
@@ -43,10 +48,10 @@ function shrink(file) {
   return new Promise(res => {
     const i = new Image();
     i.onload = () => {
-      const s = 320, c = document.createElement('canvas'), m = Math.min(i.width, i.height);
+      const s = 480, c = document.createElement('canvas'), m = Math.min(i.width, i.height);
       c.width = c.height = s;
       c.getContext('2d').drawImage(i, (i.width - m) / 2, (i.height - m) / 2, m, m, 0, 0, s, s);
-      res(c.toDataURL('image/jpeg', .75));
+      res(c.toDataURL('image/jpeg', .85));
     };
     i.src = URL.createObjectURL(file);
   });
@@ -82,10 +87,20 @@ async function loadGal() {
   $('#gl').innerHTML = s.docs.map(d => `<div class="gi"><img src="${d.data().img}"><small>${safe(d.data().caption)}</small><button class="sec" onclick="delGal('${d.id}')">حذف</button></div>`).join('') || '<p>لسه مفيش صور</p>';
 }
 async function delGal(id) { if (confirm('حذف الصورة؟')) { await G.doc(id).delete(); loadGal(); } }
-function shrinkTo(file, max = 1100, q = .7) {
+function shrinkTo(file, max = 1920) {
+  // جودة عالية: أقصى مقاس 1920px، ونقلل الجودة/المقاس بس لو الصورة عدّت حد Firestore (~1MB)
   return new Promise(res => {
     const i = new Image();
-    i.onload = () => { const k = Math.min(1, max / Math.max(i.width, i.height)), c = document.createElement('canvas'); c.width = i.width * k; c.height = i.height * k; c.getContext('2d').drawImage(i, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); };
+    i.onload = () => {
+      let k = Math.min(1, max / Math.max(i.width, i.height)), out;
+      for (let t = 0; t < 6; t++) {
+        const c = document.createElement('canvas'); c.width = Math.round(i.width * k); c.height = Math.round(i.height * k);
+        const x = c.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(i, 0, 0, c.width, c.height);
+        for (const q of [.9, .82, .74]) { out = c.toDataURL('image/jpeg', q); if (out.length < 900000) return res(out); }
+        k *= .85;
+      }
+      res(out);
+    };
     i.src = URL.createObjectURL(file);
   });
 }
