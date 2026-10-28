@@ -111,3 +111,30 @@ function shrinkTo(file, max = 1920) {
 });
 $('#gpick').onclick = () => $('#gf').click();
 $('#gcam').onclick = () => $('#gc').click();
+
+// فحص الروابط: الأزواج متبادلين، الأب والأم مربوطين، الأنواع، التواريخ، ودوائر الأجداد
+const yr = p => +((dg0(p.birth).match(/\d{4}/) || [0])[0]);
+const dg0 = s => String(s || '').replace(/[٠-٩]/g, c => c.charCodeAt(0) - 1632);
+async function check(apply) {
+  const b = db.batch(), V = firebase.firestore.FieldValue, msg = new Set(), nm = id => P[id] ? P[id].name : '؟'; let fixes = 0;
+  const ps = Object.values(P);
+  ps.forEach(p => {
+    (p.spouseIds || []).forEach(s => {
+      if (!P[s]) { msg.add(`${p.name}: زوج/زوجة محذوف من النظام`); b.update(C.doc(p.id), { spouseIds: V.arrayRemove(s) }); fixes++; }
+      else if (!(P[s].spouseIds || []).includes(p.id)) { msg.add(`${p.name} مربوط بـ ${nm(s)} من طرف واحد`); b.update(C.doc(s), { spouseIds: V.arrayUnion(p.id) }); fixes++; }
+    });
+    const f = P[p.fatherId], m = P[p.motherId];
+    if (p.fatherId && !f) msg.add(`${p.name}: الأب المسجل اتحذف`);
+    if (p.motherId && !m) msg.add(`${p.name}: الأم المسجلة اتحذفت`);
+    if (f && f.gender !== 'm') msg.add(`${p.name}: الأب (${f.name}) نوعه أنثى`);
+    if (m && m.gender !== 'f') msg.add(`${p.name}: الأم (${m.name}) نوعها ذكر`);
+    if (f && m && !(f.spouseIds || []).includes(m.id)) { msg.add(`${f.name} و${m.name} والدين ${p.name} ومش مربوطين كزوجين`); b.update(C.doc(f.id), { spouseIds: V.arrayUnion(m.id) }); b.update(C.doc(m.id), { spouseIds: V.arrayUnion(f.id) }); fixes++; }
+    [f, m].filter(Boolean).forEach(x => { if (yr(p) && yr(x) && yr(p) - yr(x) < 12) msg.add(`${p.name}: فرق السن بينه وبين ${x.name} غير منطقي، راجع تاريخ الميلاد`); });
+    let c = p, n = 0; while (c && n++ < 60) { c = P[c.fatherId] || P[c.motherId]; if (c && c.id === p.id) { msg.add(`${p.name}: دايرة في الأجداد (بقى جد نفسه)`); break; } }
+  });
+  if (apply) { await b.commit(); await load(); }
+  const kids = ps.filter(p => P[p.fatherId] || P[p.motherId]).length, sib = ps.filter(p => ps.some(x => x.id !== p.id && ((p.fatherId && x.fatherId === p.fatherId) || (p.motherId && x.motherId === p.motherId)))).length;
+  const list = [...msg].map(t => `<p>⚠️ ${safe(t)}</p>`).join('');
+  $('#chkout').innerHTML = `<p>الأشخاص: ${ps.length} • مربوطين بأب أو أم: ${kids} • عندهم إخوة: ${sib}</p>` + (msg.size ? list : '<p>✅ كل الروابط سليمة</p>') + (fixes && !apply ? '<button type="button" onclick="check(true)">🛠️ إصلاح الروابط اللي ينفع تتصلح تلقائي</button>' : '');
+}
+$('#chk').onclick = () => check(false);

@@ -8,7 +8,7 @@
 <select id="fatherId"></select><select id="motherId"></select>
 <label style="color:#9fb0c6;font-size:13px">الزوج / الزوجة (اختياري، تقدر تضيف أكتر من واحد)</label>
 <div style="display:flex;gap:6px"><select id="spSel"></select><button type="button" id="spAdd" style="width:auto;white-space:nowrap">+ إضافة</button></div><div id="spChips"></div>
-<input id="birth" placeholder="سنة الميلاد"><input id="job" placeholder="الوظيفة"><div style="text-align:center;margin:8px 0"><div id="pv" class="av" style="width:96px;height:96px;font-size:32px;animation:none">📷</div>
+<input id="birth" placeholder="تاريخ الميلاد (2002-05-14 أو 2002) — بيرتب الأبناء بالسن"><input id="job" placeholder="الوظيفة"><div style="text-align:center;margin:8px 0"><div id="pv" class="av" style="width:96px;height:96px;font-size:32px;animation:none">📷</div>
 <input type="hidden" id="photo"><input type="file" id="pf" accept="image/*" hidden><input type="file" id="pc" accept="image/*" capture="user" hidden>
 <button type="button" class="sec" id="pg">🖼️ اختيار صورة من الجهاز</button><button type="button" class="sec" id="pcam">📸 التقاط صورة بالكاميرا</button><button type="button" class="sec" id="px">حذف الصورة</button></div><textarea id="bio" rows="4" placeholder="نبذة تعريفية"></textarea>
 <button>حفظ</button><button type="button" class="sec" id="rs">جديد</button></form>
@@ -17,6 +17,7 @@
 <input type="file" id="gf" accept="image/*" multiple hidden><input type="file" id="gc" accept="image/*" capture="environment" hidden>
 <button type="button" id="gpick">🖼️ إضافة صور من الجهاز (تقدر تختار كذا واحدة)</button><button type="button" class="sec" id="gcam">📸 التقاط صورة بالكاميرا</button>
 <p id="gst" style="text-align:center;color:#d4a954"></p><div id="gl" class="gg"></div></div>
+<div class="card"><h3>فحص الروابط</h3><button type="button" class="sec" id="chk">🔍 فحص الأزواج والأبناء والإخوة</button><div id="chkout"></div></div>
 <div class="card"><h3>الأشخاص</h3><div id="list"></div></div><button class="sec" id="out">تسجيل خروج</button></div>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
