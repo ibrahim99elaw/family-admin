@@ -11,7 +11,7 @@ async function load() {
   $('#motherId').innerHTML = opt(L.filter(p => p.gender === 'f'), 'الأم (اختياري)');
   renderSp();
   $('#list').innerHTML = L.map(p => `<div class="row"><span>${p.fullName}</span><span><button onclick="edit('${p.id}')">تعديل</button> <button class="sec" onclick="del('${p.id}')">حذف</button></span></div>`).join('') || '<p>لسه مفيش بيانات</p>';
-  loadGal();
+  loadGal(); loadArc();
 }
 const F = ['fullName', 'name', 'nickname', 'gender', 'fatherId', 'motherId', 'birth', 'job', 'photo', 'bio'];
 function edit(id) {
@@ -138,3 +138,24 @@ async function check(apply) {
   $('#chkout').innerHTML = `<p>الأشخاص: ${ps.length} • مربوطين بأب أو أم: ${kids} • عندهم إخوة: ${sib}</p>` + (msg.size ? list : '<p>✅ كل الروابط سليمة</p>') + (fixes && !apply ? '<button type="button" onclick="check(true)">🛠️ إصلاح الروابط اللي ينفع تتصلح تلقائي</button>' : '');
 }
 $('#chk').onclick = () => check(false);
+
+// الأرشيف: المصغّرة في collection اسمه archive (خفيفة للعرض)، والصورة الكاملة في archiveFull (بتتحمّل لما تفتح الصورة)
+const A = db.collection('archive'), AF = db.collection('archiveFull');
+async function loadArc() {
+  const s = await A.orderBy('ts').get();
+  $('#al').innerHTML = s.docs.map(d => { const x = d.data(); return `<div class="gi"><img src="${x.thumb}"><small>${safe(x.year)} ${safe(x.caption)}</small><button class="sec" onclick="delArc('${d.id}')">حذف</button></div>`; }).join('') || '<p>الأرشيف فاضي</p>';
+}
+async function delArc(id) { if (confirm('حذف الصورة من الأرشيف؟')) { const b = db.batch(); b.delete(A.doc(id)); b.delete(AF.doc(id)); await b.commit(); loadArc(); } }
+['af', 'ac'].forEach(k => $('#' + k).onchange = async e => {
+  const fs = [...e.target.files]; let n = 0;
+  for (const f of fs) {
+    $('#ast').textContent = `جاري الرفع ${++n}/${fs.length}...`;
+    const id = A.doc().id, b = db.batch();
+    b.set(A.doc(id), { thumb: await shrinkTo(f, 480), caption: $('#acap').value.trim(), year: $('#ayr').value.trim(), ts: Date.now() + n });
+    b.set(AF.doc(id), { img: await shrinkTo(f) });
+    await b.commit();
+  }
+  e.target.value = ''; $('#acap').value = ''; $('#ayr').value = ''; $('#ast').textContent = ''; loadArc();
+});
+$('#apick').onclick = () => $('#af').click();
+$('#acam').onclick = () => $('#ac').click();
