@@ -11,7 +11,7 @@ async function load() {
   $('#motherId').innerHTML = opt(L.filter(p => p.gender === 'f'), 'الأم (اختياري)');
   renderSp();
   $('#list').innerHTML = L.map(p => `<div class="row"><span>${p.fullName}</span><span><button onclick="edit('${p.id}')">تعديل</button> <button class="sec" onclick="del('${p.id}')">حذف</button></span></div>`).join('') || '<p>لسه مفيش بيانات</p>';
-  loadGal(); loadArc();
+  loadGal(); loadArc(); loadSn();
 }
 const F = ['fullName', 'name', 'nickname', 'gender', 'fatherId', 'motherId', 'birth', 'job', 'photo', 'bio'];
 function edit(id) {
@@ -159,3 +159,47 @@ async function delArc(id) { if (confirm('حذف الصورة من الأرشيف
 });
 $('#apick').onclick = () => $('#af').click();
 $('#acam').onclick = () => $('#ac').click();
+
+// رسالة الترحيب الصوتية: الملف بيتقسم لقطع (700KB) في collection اسمه audioChunks، والبيانات في audio/welcome
+const AU = db.collection('audio'), ACH = db.collection('audioChunks'), CH = 700000;
+const mimeOf = f => { const t = (f.type || '').split(';')[0], e = (f.name.split('.').pop() || '').toLowerCase(); return t && t !== 'audio/x-m4a' ? t : ({ mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', aac: 'audio/aac' }[e] || 'audio/mpeg'); };
+async function loadSn() {
+  const d = await AU.doc('welcome').get();
+  if (!d.exists) { $('#snCur').innerHTML = '<p>مفيش ملف صوتي حاليًا</p>'; return; }
+  const m = d.data(); $('#snTitle').value = m.title || ''; $('#snLoop').checked = !!m.loop;
+  $('#snCur').innerHTML = `<p>الحالي: <b>${safe(m.title)}</b> (${Math.round(m.size / 1024)} KB)</p><audio id="snAu" controls style="width:100%"></audio><button type="button" class="sec" id="snDel">حذف الملف الصوتي</button>`;
+  $('#snDel').onclick = delSn;
+  const parts = await Promise.all([...Array(m.chunks)].map((_, i) => ACH.doc('welcome_' + i).get()));
+  $('#snAu').src = `data:${m.mime};base64,` + parts.map(p => p.data().d).join('');
+}
+async function saveSn(blob, mime) {
+  if (blob.size > 4 * 1024 * 1024) return alert('الملف أكبر من 4MB. اضغطه أو سجّل رسالة أقصر.');
+  $('#snSt').textContent = 'جاري الرفع...';
+  const b64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+  const old = await AU.doc('welcome').get(), oldN = old.exists ? old.data().chunks : 0, n = Math.ceil(b64.length / CH), b = db.batch();
+  for (let i = 0; i < n; i++) b.set(ACH.doc('welcome_' + i), { d: b64.slice(i * CH, (i + 1) * CH) });
+  for (let i = n; i < oldN; i++) b.delete(ACH.doc('welcome_' + i));
+  b.set(AU.doc('welcome'), { title: $('#snTitle').value.trim(), loop: $('#snLoop').checked, mime: (mime || 'audio/mpeg').split(';')[0], size: blob.size, chunks: n, ts: Date.now() });
+  await b.commit(); $('#snSt').textContent = 'تم الحفظ ✅'; loadSn();
+}
+async function delSn() {
+  if (!confirm('حذف الملف الصوتي؟')) return;
+  const d = await AU.doc('welcome').get(), b = db.batch();
+  for (let i = 0; i < (d.exists ? d.data().chunks : 0); i++) b.delete(ACH.doc('welcome_' + i));
+  b.delete(AU.doc('welcome')); await b.commit(); $('#snSt').textContent = ''; loadSn();
+}
+$('#snPick').onclick = () => $('#snFile').click();
+$('#snFile').onchange = e => { const f = e.target.files[0]; if (f) saveSn(f, mimeOf(f)); e.target.value = ''; };
+let rec, rch = [], rtim;
+$('#snRec').onclick = async () => {
+  if (rec && rec.state === 'recording') { rec.stop(); return; }
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const mt = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)), t0 = Date.now();
+    rec = new MediaRecorder(st, mt ? { mimeType: mt, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 }); rch = [];
+    rec.ondataavailable = e => e.data.size && rch.push(e.data);
+    rec.onstop = async () => { clearInterval(rtim); st.getTracks().forEach(t => t.stop()); $('#snRec').textContent = '🎙️ تسجيل رسالة بالميكروفون'; await saveSn(new Blob(rch, { type: rec.mimeType }), rec.mimeType); };
+    rec.start(); $('#snRec').textContent = '⏹ إيقاف وحفظ';
+    rtim = setInterval(() => $('#snSt').textContent = '🔴 بيسجّل... ' + Math.floor((Date.now() - t0) / 1000) + ' ثانية', 500);
+  } catch (e) { alert('تعذر الوصول للميكروفون: ' + e.message); }
+};
