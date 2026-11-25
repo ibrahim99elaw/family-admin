@@ -104,11 +104,10 @@ function shrinkTo(file, max = 1920) {
     i.src = URL.createObjectURL(file);
   });
 }
-['gf', 'gc'].forEach(k => $('#' + k).onchange = async e => {
-  const fs = [...e.target.files]; let n = 0;
-  for (const f of fs) { $('#gst').textContent = `جاري الرفع ${++n}/${fs.length}...`; await G.add({ img: await shrinkTo(f), caption: $('#gcap').value.trim(), ts: Date.now() + n }); }
-  e.target.value = ''; $('#gcap').value = ''; $('#gst').textContent = ''; loadGal();
-});
+const upG = makeUploader('#gst', async it => { await G.add({ img: await shrinkTo(it.f), caption: it.cap, ts: it.ts }); }, () => loadGal());
+const onGalFiles = files => { const base = Date.now(), cap = $('#gcap').value.trim(); upG(files.map((f, i) => ({ f, cap, ts: base + i }))); };
+['gf', 'gc'].forEach(k => $('#' + k).onchange = e => { const fs = [...e.target.files]; e.target.value = ''; onGalFiles(fs); });
+dropFiles('#galCard', onGalFiles);
 $('#gpick').onclick = () => $('#gf').click();
 $('#gcam').onclick = () => $('#gc').click();
 
@@ -139,24 +138,54 @@ async function check(apply) {
 }
 $('#chk').onclick = () => check(false);
 
-// الأرشيف: المصغّرة في collection اسمه archive (خفيفة للعرض)، والصورة الكاملة في archiveFull (بتتحمّل لما تفتح الصورة)
+// الأرشيف بالأقسام: القسم محفوظ على كل صورة (section)، والأقسام الفاضية دوكيومنت isSection في نفس collection (archive)
+// الصور القديمة (من غير section) بتتحط تحت قسم بنفس اسم وصفها القديم
 const A = db.collection('archive'), AF = db.collection('archiveFull');
+let ARC = [], SECS = [], lastSec = '';
+const secOf = x => x.section || x.caption || 'بدون قسم';
+const mini = 'style="width:auto;padding:4px 10px;font-size:12px;margin:0 4px"';
 async function loadArc() {
   const s = await A.orderBy('ts').get();
-  $('#al').innerHTML = s.docs.map(d => { const x = d.data(); return `<div class="gi"><img src="${x.thumb}"><small>${safe(x.year)} ${safe(x.caption)}</small><button class="sec" onclick="delArc('${d.id}')">حذف</button></div>`; }).join('') || '<p>الأرشيف فاضي</p>';
+  ARC = s.docs.map(d => ({ id: d.id, ...d.data() }));
+  const photos = ARC.filter(x => x.thumb), names = [];
+  ARC.filter(x => x.isSection).forEach(x => names.includes(x.name) || names.push(x.name));
+  photos.forEach(x => { const n = secOf(x); names.includes(n) || names.push(n); });
+  SECS = names;
+  const cur = $('#asec').value || lastSec, opts = sel => names.map(n => `<option${n === sel ? ' selected' : ''}>${safe(n)}</option>`).join('');
+  $('#asec').innerHTML = opts(cur) + '<option value="__new">➕ قسم جديد...</option>';
+  $('#asecNew').hidden = $('#asec').value !== '__new';
+  $('#al').innerHTML = names.map((n, i) => {
+    const ps = photos.filter(x => secOf(x) === n);
+    return `<h3 class="ct">${safe(n)} (${ps.length}) <button type="button" class="sec" ${mini} onclick="renSec(${i})">✏️ اسم</button>${ps.length ? '' : `<button type="button" class="sec" ${mini} onclick="delSec(${i})">🗑 حذف</button>`}</h3>
+      <div class="gg">${ps.map(x => `<div class="gi"><img src="${x.thumb}"><small>${safe(x.year)} ${x.section ? safe(x.caption) : ''}</small><select onchange="mvArc('${x.id}',this.value)">${opts(n)}</select><button class="sec" onclick="delArc('${x.id}')">حذف</button></div>`).join('')}</div>`;
+  }).join('') || '<p>الأرشيف فاضي</p>';
 }
+async function renSec(i) {
+  const old = SECS[i], nn = (prompt('اسم القسم الجديد', old) || '').trim(); if (!nn || nn === old) return;
+  const b = db.batch();
+  ARC.forEach(x => { if (x.isSection && x.name === old) b.update(A.doc(x.id), { name: nn }); else if (x.thumb && secOf(x) === old) b.update(A.doc(x.id), { section: nn }); });
+  await b.commit(); lastSec = nn; $('#asec').value = nn; loadArc();
+}
+async function delSec(i) { if (!confirm('حذف القسم الفاضي؟')) return; const b = db.batch(); ARC.filter(x => x.isSection && x.name === SECS[i]).forEach(x => b.delete(A.doc(x.id))); await b.commit(); loadArc(); }
+async function mvArc(id, sec) { await A.doc(id).update({ section: sec }); loadArc(); }
 async function delArc(id) { if (confirm('حذف الصورة من الأرشيف؟')) { const b = db.batch(); b.delete(A.doc(id)); b.delete(AF.doc(id)); await b.commit(); loadArc(); } }
-['af', 'ac'].forEach(k => $('#' + k).onchange = async e => {
-  const fs = [...e.target.files]; let n = 0;
-  for (const f of fs) {
-    $('#ast').textContent = `جاري الرفع ${++n}/${fs.length}...`;
-    const id = A.doc().id, b = db.batch();
-    b.set(A.doc(id), { thumb: await shrinkTo(f, 480), caption: $('#acap').value.trim(), year: $('#ayr').value.trim(), ts: Date.now() + n });
-    b.set(AF.doc(id), { img: await shrinkTo(f) });
-    await b.commit();
-  }
-  e.target.value = ''; $('#acap').value = ''; $('#ayr').value = ''; $('#ast').textContent = ''; loadArc();
-});
+$('#asec').onchange = () => { $('#asecNew').hidden = $('#asec').value !== '__new'; };
+$('#asecAdd').onclick = async () => { const n = (prompt('اسم القسم الجديد') || '').trim(); if (!n) return; if (!SECS.includes(n)) await A.add({ isSection: true, name: n, ts: Date.now() }); lastSec = n; $('#asec').value = n; loadArc(); };
+const upArc = makeUploader('#ast', async it => {
+  const id = A.doc().id, b = db.batch();
+  b.set(A.doc(id), { thumb: await shrinkTo(it.f, 480), section: it.sec, caption: it.cap, year: it.yr, ts: it.ts });
+  b.set(AF.doc(id), { img: await shrinkTo(it.f) });
+  await b.commit();
+}, () => loadArc());
+const onArcFiles = files => {
+  const v = $('#asec').value, sec = (v === '__new' ? $('#asecNew').value : v).trim();
+  if (!sec) return alert('اختار قسم أو اكتب اسم قسم جديد');
+  if (v === '__new') { const sel = $('#asec'); sel.insertBefore(new Option(sec, sec), sel.lastElementChild); sel.value = sec; $('#asecNew').hidden = true; $('#asecNew').value = ''; }
+  lastSec = sec; const base = Date.now(), cap = $('#acap').value.trim(), yr = $('#ayr').value.trim();
+  upArc(files.map((f, i) => ({ f, sec, cap, yr, ts: base + i })));
+};
+['af', 'ac'].forEach(k => $('#' + k).onchange = e => { const fs = [...e.target.files]; e.target.value = ''; onArcFiles(fs); });
+dropFiles('#archCard', onArcFiles);
 $('#apick').onclick = () => $('#af').click();
 $('#acam').onclick = () => $('#ac').click();
 
@@ -203,3 +232,25 @@ $('#snRec').onclick = async () => {
     rtim = setInterval(() => $('#snSt').textContent = '🔴 بيسجّل... ' + Math.floor((Date.now() - t0) / 1000) + ' ثانية', 500);
   } catch (e) { alert('تعذر الوصول للميكروفون: ' + e.message); }
 };
+
+// رفع متعدد: طابور بيرفع 3 صور في نفس الوقت، وتقدر تضيف صور تانية وهو شغال
+function makeUploader(statusSel, job, after) {
+  const list = []; let running = 0, done = 0, total = 0, fail = 0;
+  const show = () => { $(statusSel).textContent = total ? `جاري الرفع... تم ${done} من ${total}${fail ? ` (فشل ${fail})` : ''}` : ''; };
+  const pump = () => {
+    while (running < 3 && list.length) {
+      const it = list.shift(); running++;
+      job(it).catch(e => { fail++; console.error(e); }).then(() => {
+        running--; done++; show();
+        if (!list.length && !running) { const msg = `تم رفع ${done - fail} صورة${fail ? ` وفشل ${fail}` : ' ✅'}`; total = done = fail = 0; $(statusSel).textContent = msg; after(); } else pump();
+      });
+    }
+  };
+  return items => { list.push(...items); total += items.length; show(); pump(); };
+}
+function dropFiles(sel, fn) {
+  const el = $(sel);
+  ['dragover', 'dragenter'].forEach(ev => el.addEventListener(ev, e => { e.preventDefault(); el.style.outline = '2px dashed #d4a954'; }));
+  ['dragleave', 'drop'].forEach(ev => el.addEventListener(ev, () => { el.style.outline = ''; }));
+  el.addEventListener('drop', e => { e.preventDefault(); const fs = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/')); if (fs.length) fn(fs); });
+}
