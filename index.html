@@ -11,6 +11,11 @@
 <input id="birth" placeholder="تاريخ الميلاد (2002-05-14 أو 2002) — بيرتب الأبناء بالسن"><input id="job" placeholder="الوظيفة"><div style="text-align:center;margin:8px 0"><div id="pv" class="av" style="width:96px;height:96px;font-size:32px;animation:none">📷</div>
 <input type="hidden" id="photo"><input type="file" id="pf" accept="image/*" hidden><input type="file" id="pc" accept="image/*" capture="user" hidden>
 <button type="button" class="sec" id="pg">🖼️ اختيار صورة من الجهاز</button><button type="button" class="sec" id="pcam">📸 التقاط صورة بالكاميرا</button><button type="button" class="sec" id="px">حذف الصورة</button></div><textarea id="bio" rows="4" placeholder="نبذة تعريفية"></textarea>
+<div style="border:1px dashed #2c4160;border-radius:12px;padding:10px;margin:8px 0">
+<label style="color:#9fb0c6;font-size:13px">🎙️ رسالة صوتية للشخص (اختياري) — بتشتغل لما حد يفتح صفحته</label>
+<input type="file" id="pAuF" accept="audio/*" hidden>
+<button type="button" class="sec" id="pAuPick">🎵 رفع ملف صوت (لحد 4MB)</button><button type="button" class="sec" id="pAuRec">🎙️ تسجيل بالميكروفون</button>
+<p id="pAuSt" class="hint"></p><audio id="pAuPv" controls hidden style="width:100%"></audio><button type="button" class="sec" id="pAuDel" hidden>🗑 حذف الرسالة الصوتية</button></div>
 <button>حفظ</button><button type="button" class="sec" id="rs">جديد</button></form>
 <div class="card" id="galCard"><h3>صور الصفحة الرئيسية (بتتبدل لوحدها)</h3>
 <input id="gcap" placeholder="تعليق على الصورة (اختياري)">

@@ -16,16 +16,16 @@ async function load() {
 const F = ['fullName', 'name', 'nickname', 'gender', 'fatherId', 'motherId', 'birth', 'job', 'photo', 'bio'];
 function edit(id) {
   const p = P[id]; $('#id').value = id; F.forEach(k => $('#' + k).value = p[k] || '');
-  setPhoto(p.photo); autoM = autoF = false;
+  setPhoto(p.photo); autoM = autoF = false; resetAud(); loadPAud(id);
   SP = [...(p.spouseIds || [])]; renderSp(); scrollTo(0, 0);
 }
 async function del(id) {
   if (!confirm('متأكد من الحذف؟')) return;
   const b = db.batch(); b.delete(C.doc(id));
   (P[id].spouseIds || []).forEach(s => b.update(C.doc(s), { spouseIds: firebase.firestore.FieldValue.arrayRemove(id) }));
-  await b.commit(); load();
+  await b.commit(); await dropAudio('p_' + id); load();
 }
-$('#rs').onclick = () => { $('#f').reset(); $('#id').value = ''; setPhoto(''); SP = []; renderSp(); autoM = autoF = false; };
+$('#rs').onclick = () => { $('#f').reset(); $('#id').value = ''; setPhoto(''); SP = []; renderSp(); autoM = autoF = false; resetAud(); };
 $('#f').onsubmit = async e => {
   e.preventDefault();
   const id = $('#id').value || C.doc().id, old = P[id]?.spouseIds || [], sp = SP.filter(s => s !== id);
@@ -39,7 +39,9 @@ $('#f').onsubmit = async e => {
   }
   sp.forEach(s => b.update(C.doc(s), { spouseIds: V.arrayUnion(id) }));
   old.filter(s => !sp.includes(s) && P[s]).forEach(s => b.update(C.doc(s), { spouseIds: V.arrayRemove(id) }));
-  await b.commit(); $('#rs').click(); load();
+  await b.commit();
+  if (PA) await putAudio('p_' + id, PA.blob, PA.mime, { person: id }); else if (PDEL) await dropAudio('p_' + id);
+  $('#rs').click(); load();
 };
 
 // الصور: قص مربع + تصغير 320px وحفظها داخل Firestore (من غير Storage)
@@ -254,3 +256,38 @@ function dropFiles(sel, fn) {
   ['dragleave', 'drop'].forEach(ev => el.addEventListener(ev, () => { el.style.outline = ''; }));
   el.addEventListener('drop', e => { e.preventDefault(); const fs = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/')); if (fs.length) fn(fs); });
 }
+
+// رسالة صوتية لكل شخص: بتتحفظ في نفس collections الصوت (audio و audioChunks) بمفتاح p_<id>، ومفيش تعديل في الـ Rules
+let PA = null, PDEL = false;
+async function putAudio(key, blob, mime, extra) {
+  const b64 = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
+  const old = await AU.doc(key).get(), oldN = old.exists ? old.data().chunks : 0, n = Math.ceil(b64.length / CH), b = db.batch();
+  for (let i = 0; i < n; i++) b.set(ACH.doc(key + '_' + i), { d: b64.slice(i * CH, (i + 1) * CH) });
+  for (let i = n; i < oldN; i++) b.delete(ACH.doc(key + '_' + i));
+  b.set(AU.doc(key), { mime: (mime || 'audio/mpeg').split(';')[0], size: blob.size, chunks: n, ts: Date.now(), ...extra });
+  await b.commit();
+}
+async function dropAudio(key) { const d = await AU.doc(key).get(); if (!d.exists) return; const b = db.batch(); for (let i = 0; i < d.data().chunks; i++) b.delete(ACH.doc(key + '_' + i)); b.delete(AU.doc(key)); await b.commit(); }
+async function readAudio(key) { const d = await AU.doc(key).get(); if (!d.exists) return null; const m = d.data(), parts = await Promise.all([...Array(m.chunks)].map((_, i) => ACH.doc(key + '_' + i).get())); return `data:${m.mime};base64,` + parts.map(p => p.data().d).join(''); }
+function resetAud() { PA = null; PDEL = false; $('#pAuPv').hidden = true; $('#pAuPv').removeAttribute('src'); $('#pAuDel').hidden = true; $('#pAuSt').textContent = ''; }
+function loadPAud(id) { readAudio('p_' + id).then(src => { if (src && $('#id').value === id && !PA && !PDEL) { $('#pAuPv').hidden = false; $('#pAuPv').src = src; $('#pAuDel').hidden = false; $('#pAuSt').textContent = 'فيه رسالة صوتية محفوظة لهذا الشخص'; } }).catch(() => { }); }
+function setPA(blob, mime) {
+  if (blob.size > 4 * 1024 * 1024) return alert('الملف أكبر من 4MB. اضغطه أو سجّل رسالة أقصر.');
+  PA = { blob, mime }; PDEL = false; $('#pAuPv').hidden = false; $('#pAuPv').src = URL.createObjectURL(blob); $('#pAuDel').hidden = false; $('#pAuSt').textContent = 'جاهزة ✅ هتتحفظ لما تدوس "حفظ"';
+}
+$('#pAuPick').onclick = () => $('#pAuF').click();
+$('#pAuF').onchange = e => { const f = e.target.files[0]; if (f) setPA(f, mimeOf(f)); e.target.value = ''; };
+$('#pAuDel').onclick = () => { PA = null; PDEL = true; $('#pAuPv').hidden = true; $('#pAuDel').hidden = true; $('#pAuSt').textContent = 'هتتحذف لما تدوس "حفظ"'; };
+let prec, prch = [], ptim;
+$('#pAuRec').onclick = async () => {
+  if (prec && prec.state === 'recording') { prec.stop(); return; }
+  try {
+    const st = await navigator.mediaDevices.getUserMedia({ audio: true }), t0 = Date.now();
+    const mt = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t));
+    prec = new MediaRecorder(st, mt ? { mimeType: mt, audioBitsPerSecond: 32000 } : { audioBitsPerSecond: 32000 }); prch = [];
+    prec.ondataavailable = e => e.data.size && prch.push(e.data);
+    prec.onstop = () => { clearInterval(ptim); st.getTracks().forEach(t => t.stop()); $('#pAuRec').textContent = '🎙️ تسجيل بالميكروفون'; setPA(new Blob(prch, { type: prec.mimeType }), prec.mimeType); };
+    prec.start(); $('#pAuRec').textContent = '⏹ إيقاف التسجيل';
+    ptim = setInterval(() => $('#pAuSt').textContent = '🔴 بيسجّل... ' + Math.floor((Date.now() - t0) / 1000) + ' ثانية', 500);
+  } catch (e) { alert('تعذر الوصول للميكروفون: ' + e.message); }
+};
